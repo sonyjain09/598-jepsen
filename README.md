@@ -1,37 +1,33 @@
-# 598-jepsen
-
 # Jepsen-DB-Tests
 
-This project runs **sequential fault-injection experiments** against Couchbase, ArangoDB, and FoundationDB.  
-Each test injects three nemeses in order:
-
-1. **Cross-region partition** (150 s) → **heal**  
-2. **Kill a node** (150 s) → **restart**  
-3. **Network partition** (150 s) → **heal**
-
-Between each fault there is a recovery window (60 s after the first two, 75 s after the final), and a short warm-up (60 s). Total ≈ 11 minutes per run.
+A Jepsen-based fault-injection suite for **Couchbase**, **ArangoDB** and **FoundationDB**, each configured in its strongest consistency mode.  
+Run sequential fault scenarios—cross-region partition, node kill/restart and network partition—interleaved with recovery windows, and verify linearizability, performance and failure-timeline behavior under load.
 
 ---
 
-## Prerequisites
+## What’s in this project
 
-- **Control node** (where you’ll run Jepsen):  
-  - Java 8+, Leiningen  
-  - SSH key access to all cluster nodes  
-- **Cluster nodes** (3–5 per database):  
-  - Ubuntu 22.04 or CentOS 7+  
-  - Passwordless SSH from control node  
+- **`resources/scripts/…-setup.sh`**  
+  Bootstrap scripts that install and configure each database on a cluster node in “strong” mode: replication, durability and write-concern settings tuned for maximal safety.  
+- **`resources/workloads/*.edn`**  
+  Three workload profiles (read-heavy, balanced, write-heavy) at 500 ops/s over 50 000 keys.  
+- **`src/jepsen_db_tests/…`**  
+  Clojure sources that define:
+  - A **composite nemesis** (cross-region split, kill/restart, network partition).
+  - A **generator** that drives warm-up, fault phases and recoveries in sequence.
+  - A **checker** that enforces strict linearizability and collects perf/timeline data.
+  - Three parallel test runners—one per database—that share the same nemesis/generator/checker scaffolding.
+- **`project.clj`**  
+  Leiningen project file pulling in Jepsen and required Clojure libraries.
 
 ---
 
-## 1. Bootstrap Control Node
+## Installation & Setup
 
-```bash
-# Install Leiningen (if needed)
-curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein > ~/bin/lein
-chmod +x ~/bin/lein
+### 1. Control Node
 
-# Clone & fetch deps
-git clone <your-repo-url> jepsen-db-tests
-cd jepsen-db-tests
-lein deps
+1. Install **Java 8+** and **Leiningen**  
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein -o ~/bin/lein  
+   chmod +x ~/bin/lein
+
