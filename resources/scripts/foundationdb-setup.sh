@@ -8,7 +8,7 @@ yum install -y https://repos.foundationdb.org/fdb/releases/7.1.19/redhat7/founda
 # Example 5-node cluster file (adjust addresses as needed)
 cat <<EOF >/etc/foundationdb/fdb.cluster
 cluster fdb-cluster-00
-# add nodes
+
 EOF
 
 systemctl enable foundationdb
