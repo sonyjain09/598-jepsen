@@ -1,33 +1,56 @@
-# Jepsen-DB-Tests
+## Jepsen Test Framework
 
-A Jepsen-based fault-injection suite for **Couchbase**, **ArangoDB** and **FoundationDB**, each configured in its strongest consistency mode.  
-Run sequential fault scenarios—cross-region partition, node kill/restart and network partition—interleaved with recovery windows, and verify linearizability, performance and failure-timeline behavior under load.
-
----
-
-## What’s in this project
-
-- **`resources/scripts/…-setup.sh`**  
-  Bootstrap scripts that install and configure each database on a cluster node in “strong” mode: replication, durability and write-concern settings tuned for maximal safety.  
-- **`resources/workloads/*.edn`**  
-  Three workload profiles (read-heavy, balanced, write-heavy) at 500 ops/s over 50 000 keys.  
-- **`src/jepsen_db_tests/…`**  
-  Clojure sources that define:
-  - A **composite nemesis** (cross-region split, kill/restart, network partition).
-  - A **generator** that drives warm-up, fault phases and recoveries in sequence.
-  - A **checker** that enforces strict linearizability and collects perf/timeline data.
-  - Three parallel test runners—one per database—that share the same nemesis/generator/checker scaffolding.
-- **`project.clj`**  
-  Leiningen project file pulling in Jepsen and required Clojure libraries.
+A generic Jepsen-based chaos-testing framework. Drop in one plugin per database (ArangoDB, Couchbase, FoundationDB, etc.)—each providing a setup script and client driver—and run a standardized 5-phase experiment that injects network partitions and measures linearizability, stale-read rate, latencies, throughput, and recovery times.
 
 ---
 
-## Installation & Setup
+## Experiment Setup
 
-### 1. Control Node
+We run a **5-phase workload** against an N-node cluster (typically 5 nodes):
 
-1. Install **Java 8+** and **Leiningen**  
+1. **Normal operation (60 s)**  
+   Clients issue a mixed 50 % reads / 50 % writes at 500 ops/s over a 50 000-key space.
+
+2. **Random-halves partition (120 s)**  
+   The `partition-random-halves` nemesis splits the cluster into two equal halves while clients continue issuing operations.
+
+3. **Recovery (75 s)**  
+   The nemesis heals the partition; we measure how quickly the system returns to baseline performance.
+
+4. **Single-node isolation (120 s)**  
+   The `partition-one` nemesis isolates a single random node to test split-brain scenarios.
+
+5. **Final recovery (75 s)**  
+   Heal the cluster and end the test.
+
+All operations and fault events are timestamped and logged. Once complete, the framework automatically computes and visualizes:
+
+- **Linearizability violations**  
+- **Stale-read rate** (reads returning values older than the latest write)  
+- **Latency distributions** (p50, p99, max)  
+- **Throughput over time**  
+- **Recovery times** (overlayed on the partition timeline)
+
+---
+
+## Installation & Prerequisites
+
+1. **Cluster Nodes**  
+   - SSH access enabled  
+   - **JDK 8+**, **Leiningen 2.8+** (manages Clojure and dependencies)  
+   - Network connectivity on SSH port and database-specific ports  
+
+2. **Clone the Repository**  
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein -o ~/bin/lein  
-   chmod +x ~/bin/lein
+   git clone https://your.git/jepsen-test-framework.git
+   cd jepsen-test-framework
 
+## Running the Tests
+
+Invoke the shared harness via Leiningen:
+
+lein run \
+  --test  core \
+  --target <db> \
+  --nodes node1,node2,node3,node4,node5 \
+  --time 480
